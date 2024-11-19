@@ -21,6 +21,8 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBConstants;
+import org.jkiss.dbeaver.model.DBPAdaptable;
+import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.app.DBPPlatform;
 import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.app.DBPWorkspace;
@@ -126,6 +128,11 @@ public abstract class BaseWorkspaceImpl implements DBPWorkspace {
         DBVModel.checkGlobalCacheIsEmpty();
     }
 
+    @Override
+    public DBPImage getResourceIcon(DBPAdaptable resourceAdapter) {
+        return null;
+    }
+
     @Nullable
     @Override
     public DBPProject getActiveProject() {
@@ -170,14 +177,15 @@ public abstract class BaseWorkspaceImpl implements DBPWorkspace {
         return getAbsolutePath().resolve(METADATA_FOLDER);
     }
 
-    public static String readWorkspaceId() {
-        return readWorkspaceIdProperty() + "-" + getLocalHostId();
-    }
-
     @NotNull
     public static String readWorkspaceIdProperty() {
         // Check workspace ID
         Path metadataFolder = GeneralUtils.getMetadataFolder();
+        return readWorkspaceId(metadataFolder);
+    }
+
+    @NotNull
+    public static String readWorkspaceId(Path metadataFolder) {
         Properties workspaceInfo = BaseWorkspaceImpl.readWorkspaceInfo(metadataFolder);
         String workspaceId = workspaceInfo.getProperty(WORKSPACE_ID);
         if (CommonUtils.isEmpty(workspaceId)) {

@@ -22,7 +22,9 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBPAdaptable;
 import org.jkiss.dbeaver.model.DBPExternalFileManager;
+import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.app.*;
 import org.jkiss.dbeaver.model.impl.app.BaseWorkspaceImpl;
 import org.jkiss.dbeaver.model.runtime.AbstractJob;
@@ -32,7 +34,6 @@ import org.jkiss.dbeaver.registry.ResourceHandlerDescriptor;
 import org.jkiss.dbeaver.registry.ResourceTypeDescriptor;
 import org.jkiss.dbeaver.registry.ResourceTypeRegistry;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
-import org.jkiss.dbeaver.runtime.resource.DBeaverNature;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
@@ -155,6 +156,16 @@ public class DesktopWorkspaceImpl extends EclipseWorkspaceImpl implements DBPWor
     @Override
     public DBPResourceHandlerDescriptor[] getAllResourceHandlers() {
         return handlerDescriptors.toArray(new DBPResourceHandlerDescriptor[0]);
+    }
+
+
+    @Override
+    public DBPImage getResourceIcon(DBPAdaptable resourceAdapter) {
+        IResource resource = resourceAdapter.getAdapter(IResource.class);
+        if (resource != null) {
+            return defaultHandler.getResourceIcon(resource);
+        }
+        return null;
     }
 
     @Override
@@ -307,13 +318,16 @@ public class DesktopWorkspaceImpl extends EclipseWorkspaceImpl implements DBPWor
         if (!(project instanceof RCPProject rcpProject)) {
             throw new DBException("Project '" + project.getName() + "' is not an RCP project");
         }
+        if (project == activeProject) {
+            throw new DBException("You cannot delete active project");
+        }
         IProject eclipseProject = rcpProject.getEclipseProject();
+        if (eclipseProject == null) {
+            throw new DBException("Project '" + project.getName() + "' is not an Eclipse project");
+        }
         if (project.isUseSecretStorage()) {
             var secretController = DBSSecretController.getProjectSecretController(project);
             secretController.deleteProjectSecrets(project.getId());
-        }
-        if (eclipseProject == null) {
-            throw new DBException("Project '" + project.getName() + "' is not an Eclipse project");
         }
         try {
             eclipseProject.delete(deleteContents, true, new NullProgressMonitor());
@@ -371,7 +385,8 @@ public class DesktopWorkspaceImpl extends EclipseWorkspaceImpl implements DBPWor
     private void loadExternalFileProperties() {
         synchronized (externalFileProperties) {
             externalFileProperties.clear();
-            java.nio.file.Path propsFile = GeneralUtils.getMetadataFolder().resolve(EXT_FILES_PROPS_STORE);
+            java.nio.file.Path propsFile = GeneralUtils.getMetadataFolder(getAbsolutePath())
+                .resolve(EXT_FILES_PROPS_STORE);
             if (Files.exists(propsFile)) {
                 try (InputStream is = Files.newInputStream(propsFile)) {
                     try (ObjectInputStream ois = new ObjectInputStream(is)) {
@@ -403,7 +418,8 @@ public class DesktopWorkspaceImpl extends EclipseWorkspaceImpl implements DBPWor
         @Override
         protected IStatus run(DBRProgressMonitor monitor) {
             synchronized (externalFileProperties) {
-                java.nio.file.Path propsFile = GeneralUtils.getMetadataFolder().resolve(EXT_FILES_PROPS_STORE);
+                java.nio.file.Path propsFile = GeneralUtils.getMetadataFolder(getAbsolutePath())
+                    .resolve(EXT_FILES_PROPS_STORE);
                 try (OutputStream os = Files.newOutputStream(propsFile)) {
                     try (ObjectOutputStream oos = new ObjectOutputStream(os)) {
                         oos.writeObject(externalFileProperties);

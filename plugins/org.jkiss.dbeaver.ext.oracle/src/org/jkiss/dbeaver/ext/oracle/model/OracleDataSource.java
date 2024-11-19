@@ -34,6 +34,9 @@ import org.jkiss.dbeaver.model.admin.sessions.DBAServerSessionManager;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.model.data.DBDAttributeContentTypeProvider;
+import org.jkiss.dbeaver.model.data.DBDPseudoAttribute;
+import org.jkiss.dbeaver.model.data.DBDPseudoAttributeContainer;
+import org.jkiss.dbeaver.model.data.DBDPseudoAttributeType;
 import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.exec.jdbc.*;
 import org.jkiss.dbeaver.model.exec.output.DBCOutputWriter;
@@ -68,8 +71,20 @@ import java.util.regex.Pattern;
 /**
  * GenericDataSource
  */
-public class OracleDataSource extends JDBCDataSource implements DBPObjectStatisticsCollector, DBPAdaptable {
+public class OracleDataSource extends JDBCDataSource implements DBPObjectStatisticsCollector, DBPAdaptable, DBDPseudoAttributeContainer {
     private static final Log log = Log.getLog(OracleDataSource.class);
+
+    public static final DBDPseudoAttribute[] KNOWN_GLOBAL_PSEUDO_ATTRS = new DBDPseudoAttribute[] {
+        new DBDPseudoAttribute(
+            DBDPseudoAttributeType.ROWID,
+            "rownum",
+            null,
+            null,
+            OracleMessages.pseudo_column_rowid_description,
+            true,
+            DBDPseudoAttribute.PropagationPolicy.ROWSET_LOCAL
+        )
+    };
 
     final public SchemaCache schemaCache = new SchemaCache();
     final DataTypeCache dataTypeCache = new DataTypeCache();
@@ -115,6 +130,11 @@ public class OracleDataSource extends JDBCDataSource implements DBPObjectStatist
 
         OracleSchema defSchema = new OracleSchema(this, -1, "TEST_SCHEMA");
         schemaCache.setCache(Collections.singletonList(defSchema));
+    }
+
+    @NotNull
+    OracleSchema getPublicSchema() {
+        return this.publicSchema;
     }
 
     @Override
@@ -373,7 +393,7 @@ public class OracleDataSource extends JDBCDataSource implements DBPObjectStatist
 
     @Override
     public ErrorType discoverErrorType(@NotNull Throwable error) {
-        Throwable rootCause = GeneralUtils.getRootCause(error);
+        Throwable rootCause = CommonUtils.getRootCause(error);
         if (rootCause instanceof SQLException) {
             switch (((SQLException) rootCause).getErrorCode()) {
                 case OracleConstants.EC_NO_RESULTSET_AVAILABLE:
@@ -628,6 +648,16 @@ public class OracleDataSource extends JDBCDataSource implements DBPObjectStatist
             } catch (Throwable e) {
                 throw new DBDatabaseException("Can't cancel session queries", e, this);
             }
+        }
+    }
+
+    @Override
+    public boolean cancelCurrentExecution(@NotNull Connection connection, @Nullable Thread connectionThread) throws DBException {
+        try {
+            BeanUtils.invokeObjectMethod(connection, "cancel");
+            return true;
+        } catch (Throwable e) {
+            throw new DBDatabaseException("Can't cancel session queries", e, this);
         }
     }
 
@@ -1101,5 +1131,15 @@ public class OracleDataSource extends JDBCDataSource implements DBPObjectStatist
             case ROWID: return OracleConstants.TYPE_NAME_ROWID;
             default: return OracleConstants.TYPE_NAME_VARCHAR2;
         }
+    }
+
+    @Override
+    public DBDPseudoAttribute[] getPseudoAttributes() throws DBException {
+        return DBDPseudoAttribute.EMPTY_ARRAY;
+    }
+
+    @Override
+    public DBDPseudoAttribute[] getAllPseudoAttributes(@NotNull DBRProgressMonitor monitor) throws DBException {
+        return KNOWN_GLOBAL_PSEUDO_ATTRS;
     }
 }
